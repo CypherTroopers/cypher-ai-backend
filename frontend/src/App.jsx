@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 const DEFAULT_BACKEND_URL = 'http://127.0.0.1:8787';
 
@@ -86,7 +86,7 @@ export default function App() {
       setAnswer(data.answer || JSON.stringify(data, null, 2));
     } catch (err) {
       setError(
-        'Chat API is not ready yet or the backend returned an error: ' +
+        'Chat API returned an error: ' +
           (err.message || String(err)),
       );
     } finally {
