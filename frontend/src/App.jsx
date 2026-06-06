@@ -1,9 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 const DEFAULT_BACKEND_URL = 'http://127.0.0.1:8787';
+const DEFAULT_AI_RPC_URL = 'http://167.86.76.166:8000';
+const DEFAULT_OLLAMA_URL = 'http://127.0.0.1:11434';
 
 function normalizeBaseUrl(value) {
   return String(value || '').replace(/\/$/, '');
+}
+
+function utf8ToHex(value) {
+  const bytes = new TextEncoder().encode(value);
+  return '0x' + Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function normalizeAddress(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 async function requestJson(baseUrl, path, options = {}) {
@@ -35,6 +46,11 @@ function StatusBadge({ ok, label }) {
   return <span className={ok ? 'badge badge-ok' : 'badge badge-warn'}>{label}</span>;
 }
 
+function JsonBlock({ value }) {
+  if (!value) return null;
+  return <pre className="answer compact">{JSON.stringify(value, null, 2)}</pre>;
+}
+
 export default function App() {
   const envBackendUrl = import.meta.env.VITE_CYPHER_AI_BACKEND_URL || DEFAULT_BACKEND_URL;
   const [backendUrl, setBackendUrl] = useState(envBackendUrl);
@@ -46,7 +62,25 @@ export default function App() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [registration, setRegistration] = useState({
+    minerAddress: '',
+    rpcUrl: DEFAULT_AI_RPC_URL,
+    ollamaUrl: DEFAULT_OLLAMA_URL,
+    note: 'ai-miner',
+  });
+  const [walletAddress, setWalletAddress] = useState('');
+  const [statusCheck, setStatusCheck] = useState(null);
+  const [challenge, setChallenge] = useState(null);
+  const [signature, setSignature] = useState('');
+  const [registrationResult, setRegistrationResult] = useState(null);
+  const [registrationError, setRegistrationError] = useState('');
+  const [registrationLoading, setRegistrationLoading] = useState(false);
+
   const baseUrl = useMemo(() => normalizeBaseUrl(backendUrl), [backendUrl]);
+
+  function updateRegistration(field, value) {
+    setRegistration((current) => ({ ...current, [field]: value }));
+  }
 
   async function refresh() {
     setError('');
@@ -91,6 +125,124 @@ export default function App() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function connectWallet() {
+    if (!window.ethereum) {
+      throw new Error('No browser wallet found. Install MetaMask or another EIP-1193 wallet.');
+    }
+
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const account = accounts?.[0];
+    if (!account) throw new Error('No wallet account selected');
+
+    setWalletAddress(account);
+    if (!registration.minerAddress) updateRegistration('minerAddress', account);
+    return account;
+  }
+
+  async function checkAiNodeStatus(event) {
+    event.preventDefault();
+    setRegistrationLoading(true);
+    setRegistrationError('');
+    setStatusCheck(null);
+
+    try {
+      const result = await requestJson(baseUrl, '/api/v1/nodes/check-status', {
+        method: 'POST',
+        body: JSON.stringify({
+          rpcUrl: registration.rpcUrl.trim(),
+          ollamaUrl: registration.ollamaUrl.trim(),
+        }),
+      });
+      setStatusCheck(result);
+    } catch (err) {
+      setRegistrationError('AI status check failed: ' + (err.message || String(err)));
+    } finally {
+      setRegistrationLoading(false);
+    }
+  }
+
+  async function createRegistrationChallenge(event) {
+    event.preventDefault();
+    setRegistrationLoading(true);
+    setRegistrationError('');
+    setChallenge(null);
+    setSignature('');
+    setRegistrationResult(null);
+
+    try {
+      const minerAddress = registration.minerAddress.trim();
+      if (!minerAddress) throw new Error('minerAddress is required');
+
+      const result = await requestJson(baseUrl, '/api/v1/challenge', {
+        method: 'POST',
+        body: JSON.stringify({ minerAddress }),
+      });
+      setChallenge(result.challenge);
+    } catch (err) {
+      setRegistrationError('Challenge creation failed: ' + (err.message || String(err)));
+    } finally {
+      setRegistrationLoading(false);
+    }
+  }
+
+  async function signRegistrationChallenge(event) {
+    event.preventDefault();
+    setRegistrationLoading(true);
+    setRegistrationError('');
+    setSignature('');
+
+    try {
+      if (!challenge?.message) throw new Error('Create a challenge first');
+
+      const account = walletAddress || await connectWallet();
+      const minerAddress = registration.minerAddress.trim();
+      if (normalizeAddress(account) !== normalizeAddress(minerAddress)) {
+        throw new Error('Connected wallet does not match minerAddress');
+      }
+
+      const signed = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [utf8ToHex(challenge.message), account],
+      });
+      setSignature(signed);
+    } catch (err) {
+      setRegistrationError('Wallet signature failed: ' + (err.message || String(err)));
+    } finally {
+      setRegistrationLoading(false);
+    }
+  }
+
+  async function registerAiMiner(event) {
+    event.preventDefault();
+    setRegistrationLoading(true);
+    setRegistrationError('');
+    setRegistrationResult(null);
+
+    try {
+      if (!signature) throw new Error('Sign the latest challenge before registering');
+
+      const result = await requestJson(baseUrl, '/api/v1/nodes/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          minerAddress: registration.minerAddress.trim(),
+          rpcUrl: registration.rpcUrl.trim(),
+          ollamaUrl: registration.ollamaUrl.trim(),
+          signature,
+          note: registration.note.trim(),
+        }),
+      });
+
+      setRegistrationResult(result);
+      setChallenge(null);
+      setSignature('');
+      await refresh();
+    } catch (err) {
+      setRegistrationError('Registration failed: ' + (err.message || String(err)));
+    } finally {
+      setRegistrationLoading(false);
     }
   }
 
@@ -146,6 +298,108 @@ export default function App() {
         </div>
       </section>
 
+      <section className="panel registration-panel">
+        <div className="section-heading">
+          <div>
+            <h2>Register AI Miner</h2>
+            <p className="muted">
+              Production registration uses wallet signing. Do not paste private keys into this frontend or the official backend.
+            </p>
+          </div>
+          <StatusBadge ok={Boolean(walletAddress)} label={walletAddress ? 'Wallet connected' : 'Wallet not connected'} />
+        </div>
+
+        <form className="registration-form">
+          <div className="form-grid">
+            <label>
+              Miner address
+              <input
+                value={registration.minerAddress}
+                onChange={(event) => updateRegistration('minerAddress', event.target.value)}
+                placeholder="0x..."
+              />
+            </label>
+            <label>
+              AI node RPC URL
+              <input
+                value={registration.rpcUrl}
+                onChange={(event) => updateRegistration('rpcUrl', event.target.value)}
+                placeholder={DEFAULT_AI_RPC_URL}
+              />
+            </label>
+            <label>
+              Ollama URL as seen by official backend
+              <input
+                value={registration.ollamaUrl}
+                onChange={(event) => updateRegistration('ollamaUrl', event.target.value)}
+                placeholder={DEFAULT_OLLAMA_URL}
+              />
+            </label>
+            <label>
+              Note
+              <input
+                value={registration.note}
+                onChange={(event) => updateRegistration('note', event.target.value)}
+                placeholder="ai-miner-1"
+              />
+            </label>
+          </div>
+
+          <div className="button-row">
+            <button type="button" onClick={async () => {
+              setRegistrationError('');
+              try {
+                await connectWallet();
+              } catch (err) {
+                setRegistrationError(err.message || String(err));
+              }
+            }}>
+              Connect Wallet
+            </button>
+            <button type="button" disabled={registrationLoading} onClick={checkAiNodeStatus}>
+              Check AI Status
+            </button>
+            <button type="button" disabled={registrationLoading} onClick={createRegistrationChallenge}>
+              Create Challenge
+            </button>
+            <button type="button" disabled={registrationLoading || !challenge} onClick={signRegistrationChallenge}>
+              Sign Challenge
+            </button>
+            <button type="button" disabled={registrationLoading || !signature} onClick={registerAiMiner}>
+              Register AI Miner
+            </button>
+          </div>
+        </form>
+
+        {walletAddress && <p className="muted">Connected wallet: {walletAddress}</p>}
+        {registrationError && <p className="error">{registrationError}</p>}
+        {statusCheck && (
+          <div className="result-block">
+            <StatusBadge ok={statusCheck.ok} label={statusCheck.ok ? 'AI status accepted' : 'AI status rejected'} />
+            <JsonBlock value={statusCheck} />
+          </div>
+        )}
+        {challenge && (
+          <div className="result-block">
+            <h3>Challenge ready</h3>
+            <p className="muted">Sign this challenge with the miner wallet. The challenge expires soon and is consumed after registration.</p>
+            <pre className="answer compact">{challenge.message}</pre>
+          </div>
+        )}
+        {signature && (
+          <div className="result-block">
+            <StatusBadge ok label="Challenge signed" />
+            <pre className="answer compact">{signature}</pre>
+          </div>
+        )}
+        {registrationResult && (
+          <div className="result-block">
+            <StatusBadge ok label="AI miner registered" />
+            <JsonBlock value={registrationResult} />
+          </div>
+        )}
+      </section>
+
       <section className="panel chat-panel">
         <h2>Ask CypherAI</h2>
         <form onSubmit={sendPrompt}>
@@ -172,6 +426,7 @@ export default function App() {
               <article className="node" key={node.id || node.minerAddress}>
                 <strong>{node.minerAddress}</strong>
                 <span>{node.rpcUrl}</span>
+                <span>{node.ollamaUrl}</span>
                 <StatusBadge ok={node.eligible} label={node.eligible ? 'eligible' : 'not eligible'} />
               </article>
             ))}
