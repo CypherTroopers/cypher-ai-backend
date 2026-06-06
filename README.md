@@ -1,17 +1,17 @@
 # CypherAI Backend + Frontend
 
-Official CypherAI service repository.
+ CypherTroopers service repository.
 
 This repository contains both:
 
-- official backend for AI miner registration and verification
+-  backend for AI miner registration and verification
 - user frontend for CypherAI chat UI
 
 ## Directory layout
 
 ```text
 .
-├── src/          # Official backend
+├── src/          # AI backend
 └── frontend/    # User frontend
 ```
 
