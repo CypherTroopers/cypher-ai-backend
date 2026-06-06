@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { listNodes, checkNodeHealth } from './registry.js';
-import { REQUIRED_AI_MODEL, MAX_PROMPT_CHARS } from './constants.js';
+import { REQUIRED_AI_MODEL } from './constants.js';
 import { generateWithOllama } from './ollama.js';
 
+const MAX_PROMPT_CHARS = 12000;
 let nextNodeIndex = 0;
 
 function sha256Hex(value) {
