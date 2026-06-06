@@ -3,11 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Official CypherAI backend for registering and verifying AI miner nodes.",
+  "description": "Official CypherAI backend and frontend for AI miner registration and user chat routing.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "NODE_ENV=development node src/server.js"
+    "dev": "NODE_ENV=development node src/server.js",
+    "backend:start": "node src/server.js",
+    "backend:dev": "NODE_ENV=development node src/server.js",
+    "frontend:install": "npm install --prefix frontend",
+    "frontend:dev": "npm run dev --prefix frontend",
+    "frontend:build": "npm run build --prefix frontend",
+    "frontend:preview": "npm run preview --prefix frontend"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
