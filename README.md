@@ -82,19 +82,30 @@ npm run frontend:dev:host
 
 ## Run with PM2
 
-Install dependencies before starting PM2. This order is important because Vite is installed under `frontend/node_modules`.
+Use this block for both first setup and later updates. It clones the repository when `/root/cypher-ai-backend` does not exist, and runs `git pull` when it already exists.
 
 ```bash
+set -e
+
+if [ ! -d /root/cypher-ai-backend/.git ]; then
+  git clone https://github.com/CypherTroopers/cypher-ai-backend.git /root/cypher-ai-backend
+fi
+
 cd /root/cypher-ai-backend
 
 git pull
 npm install
 npm run frontend:install
+
+if [ ! -f frontend/.env ]; then
+  cp frontend/.env.example frontend/.env
+fi
 ```
 
 Start backend:
 
 ```bash
+cd /root/cypher-ai-backend
 pm2 delete cypher-ai-backend || true
 pm2 start npm --name cypher-ai-backend -- start
 ```
@@ -102,6 +113,7 @@ pm2 start npm --name cypher-ai-backend -- start
 Start frontend for external access:
 
 ```bash
+cd /root/cypher-ai-backend
 pm2 delete cypher-ai-frontend || true
 pm2 start npm --name cypher-ai-frontend -- run frontend:dev:host
 ```
@@ -178,54 +190,4 @@ curl -s -X POST http://127.0.0.1:8787/api/v1/nodes/register \
     "signature":"0xSIGNATURE",
     "note":"ai-miner-1"
   }' | jq
-```
-
-List all registered nodes:
-
-```bash
-curl -s http://127.0.0.1:8787/api/v1/nodes | jq
-```
-
-List eligible AI nodes:
-
-```bash
-curl -s http://127.0.0.1:8787/api/v1/nodes/eligible | jq
-```
-
-## Chat API
-
-The frontend sends user prompts to:
-
-```text
-POST /api/v1/chat
-```
-
-Manual test:
-
-```bash
-curl -s -X POST http://127.0.0.1:8787/api/v1/chat \
-  -H "Content-Type: application/json" \
-  --data '{"prompt":"Hello CypherAI"}' | jq
-```
-
-If no eligible AI miner is registered, the endpoint returns an error such as:
-
-```text
-no eligible AI nodes registered
-```
-
-## Common issue: vite not found
-
-If PM2 logs show:
-
-```text
-sh: 1: vite: not found
-```
-
-Run frontend dependency installation before starting the frontend process:
-
-```bash
-cd /root/cypher-ai-backend
-npm run frontend:install
-pm2 restart cypher-ai-frontend
 ```
