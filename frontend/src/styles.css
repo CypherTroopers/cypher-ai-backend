@@ -61,6 +61,10 @@ label {
   font-weight: 700;
 }
 
+a {
+  color: inherit;
+}
+
 .page {
   width: min(1120px, calc(100% - 2rem));
   margin: 0 auto;
@@ -73,6 +77,33 @@ label {
   gap: 1rem;
   align-items: stretch;
   margin-bottom: 1rem;
+}
+
+.top-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.top-nav a,
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 0.65rem 0.95rem;
+  color: #cfe2ff;
+  font-weight: 800;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.top-nav a.active {
+  background: #6ea2ff;
+  color: #041022;
+  border-color: transparent;
 }
 
 .eyebrow {
@@ -118,6 +149,10 @@ h3 {
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
   padding: 1.25rem;
   backdrop-filter: blur(10px);
+}
+
+.compact-panel {
+  margin-bottom: 1rem;
 }
 
 .status-card {
