@@ -51,7 +51,23 @@ function JsonBlock({ value }) {
   return <pre className="answer compact">{JSON.stringify(value, null, 2)}</pre>;
 }
 
+function TopNav({ currentPage }) {
+  return (
+    <nav className="top-nav">
+      <a className={currentPage === 'chat' ? 'active' : ''} href="/">
+        User Chat
+      </a>
+      <a className={currentPage === 'register' ? 'active' : ''} href="/miner/register">
+        Register AI Miner
+      </a>
+    </nav>
+  );
+}
+
 export default function App() {
+  const currentPath = window.location.pathname.replace(/\/$/, '') || '/';
+  const currentPage = currentPath === '/miner/register' ? 'register' : 'chat';
+
   const envBackendUrl = import.meta.env.VITE_CYPHER_AI_BACKEND_URL || DEFAULT_BACKEND_URL;
   const [backendUrl, setBackendUrl] = useState(envBackendUrl);
   const [status, setStatus] = useState(null);
@@ -119,10 +135,7 @@ export default function App() {
 
       setAnswer(data.answer || JSON.stringify(data, null, 2));
     } catch (err) {
-      setError(
-        'Chat API returned an error: ' +
-          (err.message || String(err)),
-      );
+      setError('Chat API returned an error: ' + (err.message || String(err)));
     } finally {
       setLoading(false);
     }
@@ -255,10 +268,13 @@ export default function App() {
       <section className="hero">
         <div>
           <p className="eyebrow">CypherAI</p>
-          <h1>Official AI frontend</h1>
+          <h1>{currentPage === 'register' ? 'Register AI Miner' : 'Ask CypherAI'}</h1>
           <p className="subtext">
-            This UI talks only to the official backend. It does not send user prompts directly to node RPC endpoints.
+            {currentPage === 'register'
+              ? 'This page is only for AI miner operators. Registration uses wallet signing and never asks for private keys.'
+              : 'User chat page. Prompts are sent only to the official backend, not directly to node RPC endpoints.'}
           </p>
+          <TopNav currentPage={currentPage} />
         </div>
         <div className="status-card">
           <StatusBadge ok={Boolean(status?.ok)} label={status?.ok ? 'Backend online' : 'Backend offline'} />
@@ -266,7 +282,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel compact-panel">
         <label htmlFor="backendUrl">Backend URL</label>
         <div className="row">
           <input
@@ -280,159 +296,185 @@ export default function App() {
         {error && <p className="error">{error}</p>}
       </section>
 
-      <section className="grid">
-        <div className="panel">
-          <h2>Required AI miner spec</h2>
-          <dl>
-            <dt>Model</dt>
-            <dd>{config?.requiredModel || 'Unknown'}</dd>
-            <dt>Minimum RAM / VRAM</dt>
-            <dd>{config?.minMemoryGB || 'Unknown'} GB</dd>
-          </dl>
-        </div>
+      {currentPage === 'chat' ? (
+        <>
+          <section className="grid">
+            <div className="panel">
+              <h2>AI network status</h2>
+              <dl>
+                <dt>Required model</dt>
+                <dd>{config?.requiredModel || 'Unknown'}</dd>
+                <dt>Eligible AI nodes</dt>
+                <dd>{eligibleNodes.length}</dd>
+              </dl>
+            </div>
 
-        <div className="panel">
-          <h2>Eligible AI nodes</h2>
-          <p className="big-number">{eligibleNodes.length}</p>
-          <p className="muted">Only nodes passing --ai.miner, eth_aiStatus, model, and preflight checks should appear here.</p>
-        </div>
-      </section>
+            <div className="panel">
+              <h2>User page</h2>
+              <p className="muted">
+                This page is for normal users asking questions. AI miner registration is handled on a separate operator page.
+              </p>
+              <a className="text-link" href="/miner/register">Open AI miner registration</a>
+            </div>
+          </section>
 
-      <section className="panel registration-panel">
-        <div className="section-heading">
-          <div>
-            <h2>Register AI Miner</h2>
-            <p className="muted">
-              Production registration uses wallet signing. Do not paste private keys into this frontend or the official backend.
-            </p>
-          </div>
-          <StatusBadge ok={Boolean(walletAddress)} label={walletAddress ? 'Wallet connected' : 'Wallet not connected'} />
-        </div>
-
-        <form className="registration-form">
-          <div className="form-grid">
-            <label>
-              Miner address
-              <input
-                value={registration.minerAddress}
-                onChange={(event) => updateRegistration('minerAddress', event.target.value)}
-                placeholder="0x..."
+          <section className="panel chat-panel">
+            <h2>Ask CypherAI</h2>
+            <form onSubmit={sendPrompt}>
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Ask a question..."
+                rows={6}
               />
-            </label>
-            <label>
-              AI node RPC URL
-              <input
-                value={registration.rpcUrl}
-                onChange={(event) => updateRegistration('rpcUrl', event.target.value)}
-                placeholder={DEFAULT_AI_RPC_URL}
-              />
-            </label>
-            <label>
-              Ollama URL as seen by official backend
-              <input
-                value={registration.ollamaUrl}
-                onChange={(event) => updateRegistration('ollamaUrl', event.target.value)}
-                placeholder={DEFAULT_OLLAMA_URL}
-              />
-            </label>
-            <label>
-              Note
-              <input
-                value={registration.note}
-                onChange={(event) => updateRegistration('note', event.target.value)}
-                placeholder="ai-miner-1"
-              />
-            </label>
-          </div>
+              <button type="submit" disabled={loading || !prompt.trim()}>
+                {loading ? 'Sending...' : 'Send'}
+              </button>
+            </form>
+            {answer && <pre className="answer">{answer}</pre>}
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="grid">
+            <div className="panel">
+              <h2>Required AI miner spec</h2>
+              <dl>
+                <dt>Model</dt>
+                <dd>{config?.requiredModel || 'Unknown'}</dd>
+                <dt>Minimum RAM / VRAM</dt>
+                <dd>{config?.minMemoryGB || 'Unknown'} GB</dd>
+              </dl>
+            </div>
 
-          <div className="button-row">
-            <button type="button" onClick={async () => {
-              setRegistrationError('');
-              try {
-                await connectWallet();
-              } catch (err) {
-                setRegistrationError(err.message || String(err));
-              }
-            }}>
-              Connect Wallet
-            </button>
-            <button type="button" disabled={registrationLoading} onClick={checkAiNodeStatus}>
-              Check AI Status
-            </button>
-            <button type="button" disabled={registrationLoading} onClick={createRegistrationChallenge}>
-              Create Challenge
-            </button>
-            <button type="button" disabled={registrationLoading || !challenge} onClick={signRegistrationChallenge}>
-              Sign Challenge
-            </button>
-            <button type="button" disabled={registrationLoading || !signature} onClick={registerAiMiner}>
-              Register AI Miner
-            </button>
-          </div>
-        </form>
+            <div className="panel">
+              <h2>Registered eligible AI nodes</h2>
+              <p className="big-number">{eligibleNodes.length}</p>
+              <p className="muted">Only nodes passing --ai.miner, eth_aiStatus, model, and preflight checks appear here.</p>
+            </div>
+          </section>
 
-        {walletAddress && <p className="muted">Connected wallet: {walletAddress}</p>}
-        {registrationError && <p className="error">{registrationError}</p>}
-        {statusCheck && (
-          <div className="result-block">
-            <StatusBadge ok={statusCheck.ok} label={statusCheck.ok ? 'AI status accepted' : 'AI status rejected'} />
-            <JsonBlock value={statusCheck} />
-          </div>
-        )}
-        {challenge && (
-          <div className="result-block">
-            <h3>Challenge ready</h3>
-            <p className="muted">Sign this challenge with the miner wallet. The challenge expires soon and is consumed after registration.</p>
-            <pre className="answer compact">{challenge.message}</pre>
-          </div>
-        )}
-        {signature && (
-          <div className="result-block">
-            <StatusBadge ok label="Challenge signed" />
-            <pre className="answer compact">{signature}</pre>
-          </div>
-        )}
-        {registrationResult && (
-          <div className="result-block">
-            <StatusBadge ok label="AI miner registered" />
-            <JsonBlock value={registrationResult} />
-          </div>
-        )}
-      </section>
+          <section className="panel registration-panel">
+            <div className="section-heading">
+              <div>
+                <h2>AI Miner Registration</h2>
+                <p className="muted">
+                  Use this page only if you operate an AI miner node. The wallet address must match the miner reward address.
+                </p>
+              </div>
+              <StatusBadge ok={Boolean(walletAddress)} label={walletAddress ? 'Wallet connected' : 'Wallet not connected'} />
+            </div>
 
-      <section className="panel chat-panel">
-        <h2>Ask CypherAI</h2>
-        <form onSubmit={sendPrompt}>
-          <textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Ask a question..."
-            rows={6}
-          />
-          <button type="submit" disabled={loading || !prompt.trim()}>
-            {loading ? 'Sending...' : 'Send'}
-          </button>
-        </form>
-        {answer && <pre className="answer">{answer}</pre>}
-      </section>
+            <form className="registration-form">
+              <div className="form-grid">
+                <label>
+                  Miner reward address
+                  <input
+                    value={registration.minerAddress}
+                    onChange={(event) => updateRegistration('minerAddress', event.target.value)}
+                    placeholder="0x..."
+                  />
+                </label>
+                <label>
+                  AI node RPC URL
+                  <input
+                    value={registration.rpcUrl}
+                    onChange={(event) => updateRegistration('rpcUrl', event.target.value)}
+                    placeholder={DEFAULT_AI_RPC_URL}
+                  />
+                </label>
+                <label>
+                  Ollama URL as seen by official backend
+                  <input
+                    value={registration.ollamaUrl}
+                    onChange={(event) => updateRegistration('ollamaUrl', event.target.value)}
+                    placeholder={DEFAULT_OLLAMA_URL}
+                  />
+                </label>
+                <label>
+                  Note
+                  <input
+                    value={registration.note}
+                    onChange={(event) => updateRegistration('note', event.target.value)}
+                    placeholder="ai-miner-1"
+                  />
+                </label>
+              </div>
 
-      <section className="panel">
-        <h2>Eligible node list</h2>
-        {eligibleNodes.length === 0 ? (
-          <p className="muted">No eligible AI nodes registered yet.</p>
-        ) : (
-          <div className="node-list">
-            {eligibleNodes.map((node) => (
-              <article className="node" key={node.id || node.minerAddress}>
-                <strong>{node.minerAddress}</strong>
-                <span>{node.rpcUrl}</span>
-                <span>{node.ollamaUrl}</span>
-                <StatusBadge ok={node.eligible} label={node.eligible ? 'eligible' : 'not eligible'} />
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+              <div className="button-row">
+                <button type="button" onClick={async () => {
+                  setRegistrationError('');
+                  try {
+                    await connectWallet();
+                  } catch (err) {
+                    setRegistrationError(err.message || String(err));
+                  }
+                }}>
+                  Connect Wallet
+                </button>
+                <button type="button" disabled={registrationLoading} onClick={checkAiNodeStatus}>
+                  Check AI Status
+                </button>
+                <button type="button" disabled={registrationLoading} onClick={createRegistrationChallenge}>
+                  Create Challenge
+                </button>
+                <button type="button" disabled={registrationLoading || !challenge} onClick={signRegistrationChallenge}>
+                  Sign Challenge
+                </button>
+                <button type="button" disabled={registrationLoading || !signature} onClick={registerAiMiner}>
+                  Register AI Miner
+                </button>
+              </div>
+            </form>
+
+            {walletAddress && <p className="muted">Connected wallet: {walletAddress}</p>}
+            {registrationError && <p className="error">{registrationError}</p>}
+            {statusCheck && (
+              <div className="result-block">
+                <StatusBadge ok={statusCheck.ok} label={statusCheck.ok ? 'AI status accepted' : 'AI status rejected'} />
+                <JsonBlock value={statusCheck} />
+              </div>
+            )}
+            {challenge && (
+              <div className="result-block">
+                <h3>Challenge ready</h3>
+                <p className="muted">Sign this challenge with the miner wallet. The challenge expires soon and is consumed after registration.</p>
+                <pre className="answer compact">{challenge.message}</pre>
+              </div>
+            )}
+            {signature && (
+              <div className="result-block">
+                <StatusBadge ok label="Challenge signed" />
+                <pre className="answer compact">{signature}</pre>
+              </div>
+            )}
+            {registrationResult && (
+              <div className="result-block">
+                <StatusBadge ok label="AI miner registered" />
+                <JsonBlock value={registrationResult} />
+              </div>
+            )}
+          </section>
+
+          <section className="panel">
+            <h2>Eligible AI node list</h2>
+            {eligibleNodes.length === 0 ? (
+              <p className="muted">No eligible AI nodes registered yet.</p>
+            ) : (
+              <div className="node-list">
+                {eligibleNodes.map((node) => (
+                  <article className="node" key={node.id || node.minerAddress}>
+                    <strong>{node.minerAddress}</strong>
+                    <span>{node.rpcUrl}</span>
+                    <span>{node.ollamaUrl}</span>
+                    <StatusBadge ok={node.eligible} label={node.eligible ? 'eligible' : 'not eligible'} />
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </main>
   );
 }
