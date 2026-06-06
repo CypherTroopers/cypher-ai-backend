@@ -3,6 +3,7 @@ import { REQUIRED_AI_MODEL, MIN_AI_MEMORY_GB, NODE_STALE_AFTER_MS, MAX_HEALTH_FA
 import { consumeChallenge } from './challenge.js';
 import { getAiStatus } from './rpc.js';
 import { validateAiStatus } from './validator.js';
+import { normalizeOllamaUrl } from './ollama.js';
 
 const nodes = new Map();
 
@@ -26,10 +27,12 @@ export async function registerNode(input) {
 
   const now = Date.now();
   const id = address.toLowerCase();
+  const ollamaUrl = normalizeOllamaUrl(input.ollamaUrl, rpcUrl);
   const node = {
     id,
     minerAddress: address,
     rpcUrl,
+    ollamaUrl,
     note: input.note || '',
     model: REQUIRED_AI_MODEL,
     memoryGB: Number(status.memoryGB || status.requiredMemoryGB || status.minMemoryGB || MIN_AI_MEMORY_GB),
