@@ -7,6 +7,7 @@ import {
   MIN_AI_MEMORY_GB,
 } from './constants.js';
 import { createChallenge } from './challenge.js';
+import { handleChat } from './chat.js';
 import {
   registerNode,
   listNodes,
@@ -16,6 +17,15 @@ import {
 } from './registry.js';
 
 const app = express();
+
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => {
@@ -30,6 +40,21 @@ app.get('/api/v1/config', (_req, res) => {
     requiredModel: REQUIRED_AI_MODEL,
     minMemoryGB: MIN_AI_MEMORY_GB,
   });
+});
+
+app.post('/api/v1/chat', async (req, res) => {
+  try {
+    const result = await handleChat(req.body);
+    res.json({
+      ok: true,
+      ...result,
+    });
+  } catch (err) {
+    res.status(503).json({
+      ok: false,
+      error: err.message || String(err),
+    });
+  }
 });
 
 app.post('/api/v1/challenge', (req, res) => {
