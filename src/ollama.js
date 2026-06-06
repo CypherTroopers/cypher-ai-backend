@@ -1,4 +1,6 @@
-import { REQUIRED_AI_MODEL, CHAT_TIMEOUT_MS } from './constants.js';
+import { REQUIRED_AI_MODEL } from './constants.js';
+
+const DEFAULT_CHAT_TIMEOUT_MS = 120000;
 
 function trimSlash(value) {
   return String(value || '').replace(/\/$/, '');
@@ -20,7 +22,7 @@ export function normalizeOllamaUrl(value, rpcUrl) {
 
 export async function generateWithOllama(ollamaUrl, prompt, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || CHAT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || DEFAULT_CHAT_TIMEOUT_MS);
 
   try {
     const response = await fetch(trimSlash(ollamaUrl) + '/api/generate', {
