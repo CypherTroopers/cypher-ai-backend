@@ -1,0 +1,20 @@
+{
+  "name": "cypher-ai-official-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Official CypherAI backend for registering and verifying AI miner nodes.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
