@@ -51,6 +51,17 @@ function saveRegistry() {
   fs.renameSync(tmp, file);
 }
 
+function isEligibleNode(node, now = Date.now()) {
+  return Boolean(node?.active && now - node.lastSeenAt <= NODE_STALE_AFTER_MS);
+}
+
+function publicNode(node, now = Date.now()) {
+  return {
+    ...node,
+    eligible: isEligibleNode(node, now),
+  };
+}
+
 loadRegistry();
 
 export async function registerNode(input) {
@@ -94,49 +105,54 @@ export async function registerNode(input) {
 
   nodes.set(id, node);
   saveRegistry();
-  return node;
+  return publicNode(node, now);
 }
 
 export function listNodes(activeOnly = false) {
   const now = Date.now();
   return Array.from(nodes.values())
-    .filter((node) => !activeOnly || (node.active && now - node.lastSeenAt <= NODE_STALE_AFTER_MS))
-    .sort((a, b) => a.registeredAt - b.registeredAt);
+    .filter((node) => !activeOnly || isEligibleNode(node, now))
+    .sort((a, b) => a.registeredAt - b.registeredAt)
+    .map((node) => publicNode(node, now));
 }
 
 export function getNode(id) {
-  return nodes.get(String(id).toLowerCase()) || null;
+  const node = nodes.get(String(id).toLowerCase()) || null;
+  return node ? publicNode(node) : null;
 }
 
 export async function checkNodeHealth(node) {
+  const id = node.id || String(node.minerAddress || '').toLowerCase();
+  const stored = nodes.get(id) || node;
+
   try {
-    const status = await getAiStatus(node.rpcUrl);
+    const status = await getAiStatus(stored.rpcUrl);
     const validation = validateAiStatus(status);
     const now = Date.now();
-    node.updatedAt = now;
-    node.status = status;
+    stored.updatedAt = now;
+    stored.status = status;
 
     if (!validation.ok) {
-      node.healthFailures += 1;
-      node.active = false;
-      node.lastError = validation.errors.join(', ');
+      stored.healthFailures += 1;
+      stored.active = false;
+      stored.lastError = validation.errors.join(', ');
       saveRegistry();
-      return node;
+      return publicNode(stored, now);
     }
 
-    node.active = true;
-    node.healthFailures = 0;
-    node.lastSeenAt = now;
-    node.lastError = '';
+    stored.active = true;
+    stored.healthFailures = 0;
+    stored.lastSeenAt = now;
+    stored.lastError = '';
     saveRegistry();
-    return node;
+    return publicNode(stored, now);
   } catch (err) {
-    node.healthFailures += 1;
-    node.updatedAt = Date.now();
-    node.lastError = err.message || String(err);
-    if (node.healthFailures >= MAX_HEALTH_FAILURES) node.active = false;
+    stored.healthFailures += 1;
+    stored.updatedAt = Date.now();
+    stored.lastError = err.message || String(err);
+    if (stored.healthFailures >= MAX_HEALTH_FAILURES) stored.active = false;
     saveRegistry();
-    return node;
+    return publicNode(stored);
   }
 }
 
