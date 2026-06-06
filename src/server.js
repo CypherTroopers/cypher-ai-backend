@@ -8,6 +8,8 @@ import {
 } from './constants.js';
 import { createChallenge } from './challenge.js';
 import { handleChat } from './chat.js';
+import { normalizeOllamaUrl } from './ollama.js';
+import { getAiStatus } from './rpc.js';
 import {
   registerNode,
   listNodes,
@@ -15,6 +17,7 @@ import {
   checkNodeHealth,
   checkAllNodes,
 } from './registry.js';
+import { validateAiStatus } from './validator.js';
 
 const app = express();
 
@@ -61,6 +64,30 @@ app.post('/api/v1/challenge', (req, res) => {
   try {
     const challenge = createChallenge(req.body.minerAddress);
     res.json({ ok: true, challenge });
+  } catch (err) {
+    res.status(400).json({
+      ok: false,
+      error: err.message || String(err),
+    });
+  }
+});
+
+app.post('/api/v1/nodes/check-status', async (req, res) => {
+  try {
+    const { rpcUrl, ollamaUrl } = req.body || {};
+    if (!rpcUrl) throw new Error('rpcUrl is required');
+
+    const status = await getAiStatus(rpcUrl);
+    const validation = validateAiStatus(status);
+    const normalizedOllamaUrl = normalizeOllamaUrl(ollamaUrl, rpcUrl);
+
+    res.status(validation.ok ? 200 : 400).json({
+      ok: validation.ok,
+      rpcUrl,
+      ollamaUrl: normalizedOllamaUrl,
+      status,
+      validation,
+    });
   } catch (err) {
     res.status(400).json({
       ok: false,
